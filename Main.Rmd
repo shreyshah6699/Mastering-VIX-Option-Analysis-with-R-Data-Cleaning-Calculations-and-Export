@@ -1,0 +1,82 @@
+---
+title: "FE515 2023 Assignment-3"
+Name : "Shrey Shah"
+output: pdf_document
+date: "2023-04-18"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+rm(list=ls())
+library(quantmod)
+```
+
+```{r}
+VIX <- getOptionChain("^VIX")
+exp_dates <- unique(VIX$VIX$calls$exDates)
+VIX_data <- list()
+
+for (exp_date in exp_dates) {
+  options <- getOptionChain("^VIX", NULL, exp_date)
+  VIX_data[[exp_date]] <- options
+}
+```
+
+```{r}
+# Save VIX_data as VIX.options
+save(VIX_data, file = "VIX.options")
+
+# Download the current price for ^VIX
+VIX_price <- as.numeric(getQuote("^VIX")$Last)
+```
+
+```{r}
+# Calculate average of Bid and Ask for calls and puts at each expiration
+for (exp_date in exp_dates) {
+  options <- VIX_data[[exp_date]]
+  if (is.null(options)) {
+    next
+  }
+  for (type in c("calls", "puts")) {
+    option_type <- options[[type]]
+    if (is.null(option_type)) {
+      next
+    }
+    option_type$Price <- rowMeans(option_type[, c("bid", "ask")], na.rm = TRUE)
+    options[[type]] <- option_type
+  }
+  VIX_data[[exp_date]] <- options
+}
+
+```
+
+```{r}
+# Add InTheMoney column to calls and puts at each expiration
+for (exp_date in exp_dates) {
+  options <- VIX_data[[exp_date]]
+  for (type in c("calls", "puts")) {
+    option_type <- options[[type]]
+    option_type$InTheMoney <- ifelse(type == "calls", option_type$strike < VIX_price, option_type$strike > VIX_price)
+    options[[type]] <- option_type
+  }
+  VIX_data[[exp_date]] <- options
+}
+```
+
+```{r}
+
+# Save calls and puts data to CSV files
+for (exp_date in exp_dates) {
+  options <- VIX_data[[exp_date]]
+  for (type in c("calls", "puts")) {
+    option_type <- options[[type]][, c("strike", "bid", "ask", "Price", "InTheMoney")]
+    file_name <- paste0("VIXdata", format(Sys.Date(), "%Y-%m-%d"), "Exp", exp_date, type, ".csv")
+    write.csv(option_type, file_name, row.names = FALSE)
+  }
+}
+```
+
+
